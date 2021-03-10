@@ -23,25 +23,28 @@ os.environ["CUDA_VISIBLE_DEVICES"] = cfgs.GPU_GROUP
 
 def train():
 
+    # 初始化DetectionNetwork类以及部分属性
     faster_rcnn = build_whole_network.DetectionNetwork(base_network_name=cfgs.NET_NAME,
                                                        is_training=True)
 
-    with tf.name_scope('get_batch'):
+    with tf.name_scope('get_batch'):  # ----- 读取训练数据集 -----
+        # gtboxes_and_label_batch : shape(1, Num_Of_objects, 9) .each row is [x1, y1, x2, y2, x3, y3, x4, y4, label]
         img_name_batch, img_batch, gtboxes_and_label_batch, num_objects_batch = \
             next_batch(dataset_name=cfgs.DATASET_NAME,  # 'pascal', 'coco'
                        batch_size=cfgs.BATCH_SIZE,
                        shortside_len=cfgs.IMG_SHORT_SIDE_LEN,
                        is_training=True)
 
-        gtboxes_and_label = tf.py_func(back_forward_convert,
-                                       inp=[tf.squeeze(gtboxes_and_label_batch, 0)],
+        gtboxes_and_label = tf.py_func(back_forward_convert,  # 将8点坐标转化为5点坐标表示([y_c, x_c, h, w, theta, (label)])
+                                       inp=[tf.squeeze(gtboxes_and_label_batch, 0)],  # tf.squeeze()：如果指定维度的维度大小为1，则删除这个维度（这里可以使用这个函数是因为batch_size设置为1）
                                        Tout=tf.float32)
-        gtboxes_and_label = tf.reshape(gtboxes_and_label, [-1, 6])
+        gtboxes_and_label = tf.reshape(gtboxes_and_label, [-1, 6])  # ！旋转Ground Truth！
 
+        # ！水平Ground Truth！(旋转GT的最小外接正矩形):[y_min, x_min, y_max, x_max, label]
         gtboxes_and_label_AreaRectangle = get_horizen_minAreaRectangle(gtboxes_and_label)
         gtboxes_and_label_AreaRectangle = tf.reshape(gtboxes_and_label_AreaRectangle, [-1, 5])
 
-    with tf.name_scope('draw_gtboxes'):
+    with tf.name_scope('draw_gtboxes'):  # ----- 画出gt图片的外接正矩形和外接斜矩形 -----
         gtboxes_in_img = draw_box_with_color(img_batch, tf.reshape(gtboxes_and_label_AreaRectangle, [-1, 5])[:, :-1],
                                              text=tf.shape(gtboxes_and_label_AreaRectangle)[0])
 
@@ -51,17 +54,17 @@ def train():
     biases_regularizer = tf.no_regularizer
     weights_regularizer = tf.contrib.layers.l2_regularizer(cfgs.WEIGHT_DECAY)
 
-    # list as many types of layers as possible, even if they are not used now
+    # list as many types of layers as possible, even if they are not used now【为下面list中的layer设置相同的默认参数weights_regularizer...】
     with slim.arg_scope([slim.conv2d, slim.conv2d_in_plane,
                          slim.conv2d_transpose, slim.separable_conv2d, slim.fully_connected],
                         weights_regularizer=weights_regularizer,
                         biases_regularizer=biases_regularizer,
                         biases_initializer=tf.constant_initializer(0.0)):
         final_boxes_h, final_scores_h, final_category_h, \
-        final_boxes_r, final_scores_r, final_category_r, loss_dict = faster_rcnn.build_whole_detection_network(
+        final_boxes_r, final_scores_r, final_category_r, loss_dict = faster_rcnn.build_whole_detection_network(  # 建立完整的Faster RCNN网络
             input_img_batch=img_batch,
-            gtboxes_r_batch=gtboxes_and_label,
-            gtboxes_h_batch=gtboxes_and_label_AreaRectangle)
+            gtboxes_r_batch=gtboxes_and_label,  # 一个batch的旋转gt框
+            gtboxes_h_batch=gtboxes_and_label_AreaRectangle)  # 一个batch的水平gt框
 
     dets_in_img = draw_boxes_with_categories_and_scores(img_batch=img_batch,
                                                         boxes=final_boxes_h,

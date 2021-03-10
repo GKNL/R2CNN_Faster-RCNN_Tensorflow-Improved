@@ -41,9 +41,8 @@ class DetectionNetwork(object):
             raise ValueError('Sry, we only support resnet or mobilenet_v2')
 
     def postprocess_fastrcnn_h(self, rois, bbox_ppred, scores, img_shape):
-
         '''
-
+        FastRCNN后处理阶段（水平分支）
         :param rois:[-1, 4]
         :param bbox_ppred: [-1, (cfgs.Class_num+1) * 4]
         :param scores: [-1, cfgs.Class_num + 1]
@@ -109,7 +108,7 @@ class DetectionNetwork(object):
 
     def postprocess_fastrcnn_r(self, rois, bbox_ppred, scores, img_shape):
         '''
-
+        FastRCNN后处理阶段（旋转分支）
         :param rois:[-1, 4]
         :param bbox_ppred: [-1, (cfgs.Class_num+1) * 5]
         :param scores: [-1, cfgs.Class_num + 1]

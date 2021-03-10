@@ -113,6 +113,12 @@ def padd_boxes_with_zeros(boxes, scores, max_num_of_boxes):
 
 
 def get_horizen_minAreaRectangle(boxs, with_label=True):
+    """
+    将5点坐标表示法转换为8点坐标【最小外接正矩形】，并分别求出四个顶点（8个坐标值）中的y_min,x_min,y_max,x_max
+    :param boxs:
+    :param with_label:
+    :return:
+    """
 
     rpn_proposals_boxes_convert = tf.py_func(forward_convert,
                                              inp=[boxs, with_label],
