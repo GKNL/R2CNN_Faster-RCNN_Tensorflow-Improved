@@ -6,6 +6,11 @@ It should be noted that we did not re-implementate exactly as the paper and just
 
 This project is based on [Faster-RCNN](https://github.com/DetectionTeamUCAS/Faster-RCNN_Tensorflow), and completed by [YangXue](https://github.com/yangxue0827) and [YangJirui](https://github.com/yangJirui).
 
+> Some changes planned on this project by myself:
+> 1. Add DFPN Network to extract feature map.
+> 2. Replace the ROI Pooling by RROI Align.
+> 3. Try to complete the code of AO-RPN and Multi-head Network.(Reference:[【MRDet】A Multi-Head Network for Accurate Oriented Object Detection in Aerial Images](https://arxiv.org/abs/2012.13135))
+
 ## [DOTA](https://captain-whu.github.io/DOTA/index.html) test results      
 ![1](DOTA.png)
 
@@ -36,12 +41,6 @@ This project is based on [Faster-RCNN](https://github.com/DetectionTeamUCAS/Fast
 |[ICN](https://arxiv.org/abs/1807.02700)|72.50|90.00|77.70|53.40|**73.30**|**73.50**|65.00|78.20|90.80|79.10|84.80|57.20|62.10|73.50|70.20|58.10|
 |[R<sup>2</sup>CNN++](https://arxiv.org/abs/1811.07126)|**75.35**|**90.18**|**81.88**|**55.30**|73.29|72.09|77.65|78.06|**90.91**|**82.44**|**86.39**|**64.53**|**63.45**|75.77|**78.21**|**60.11**|
 
-## Face Detection
-Environment: NVIDIA GeForce GTX 1060    
-![2](face.gif)   
-
-## ICDAR2015
-![3](./tools/inference_results/R2CNN_20181011_ICDAR2015_v1/icdar2015.jpg)   
 
 ## Requirements
 1、tensorflow >= 1.2     
