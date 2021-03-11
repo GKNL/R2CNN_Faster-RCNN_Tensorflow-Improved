@@ -178,7 +178,7 @@ class DetectionNetwork(object):
         '''
         Here use roi warping as roi_pooling
 
-        :param featuremaps_dict: feature map to crop
+        :param featuremaps_dict: feature map to crop  【A 4-D tensor of shape `[batch, image_height, image_width, depth]`】
         :param rois: shape is [-1, 4]. [x1, y1, x2, y2]
         :return:
         '''
@@ -188,22 +188,24 @@ class DetectionNetwork(object):
             N = tf.shape(rois)[0]
             x1, y1, x2, y2 = tf.unstack(rois, axis=1)
 
-            normalized_x1 = x1 / img_w
+            normalized_x1 = x1 / img_w  # 归一化坐标
             normalized_x2 = x2 / img_w
             normalized_y1 = y1 / img_h
             normalized_y2 = y2 / img_h
 
-            normalized_rois = tf.transpose(
+            normalized_rois = tf.transpose(  # 矩阵转置
                 tf.stack([normalized_y1, normalized_x1, normalized_y2, normalized_x2]), name='get_normalized_rois')
 
             normalized_rois = tf.stop_gradient(normalized_rois)
 
+            # 卷积特征图相应部分被裁剪，并resize为常数大小（14,14）
             cropped_roi_features = tf.image.crop_and_resize(feature_maps, normalized_rois,
                                                             box_ind=tf.zeros(shape=[N, ],
                                                                              dtype=tf.int32),
                                                             crop_size=[cfgs.ROI_SIZE, cfgs.ROI_SIZE],
                                                             name='CROP_AND_RESIZE'
-                                                            )
+                                                            )  # method默认为'bilinear'
+            # 用2×2的滑动窗口进行最大池化操作，输出的尺度是7×7
             roi_features = slim.max_pool2d(cropped_roi_features,
                                            [cfgs.ROI_POOL_KERNEL_SIZE, cfgs.ROI_POOL_KERNEL_SIZE],
                                            stride=cfgs.ROI_POOL_KERNEL_SIZE)
