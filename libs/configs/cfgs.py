@@ -74,11 +74,20 @@ BBOX_INITIALIZER = tf.random_normal_initializer(mean=0.0, stddev=0.001)
 WEIGHT_DECAY = 0.0001
 
 
-# ---------------------------------------------Anchor config
-BASE_ANCHOR_SIZE_LIST = [256]  # can be modified
-ANCHOR_STRIDE = [16]  # can not be modified in most situations
-ANCHOR_SCALES = [0.0625, 0.125, 0.25, 0.5, 1., 2.0]  # [4, 8, 16, 32]
-ANCHOR_RATIOS = [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5., 6., 1 / 6., 7., 1 / 7.]
+# # ---------------------------------------------Anchor config [without FPN]
+# BASE_ANCHOR_SIZE_LIST = [256]  # can be modified
+# ANCHOR_STRIDE = [16]  # can not be modified in most situations
+# ANCHOR_SCALES = [0.0625, 0.125, 0.25, 0.5, 1., 2.0]  # [4, 8, 16, 32]
+# ANCHOR_RATIOS = [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5., 6., 1 / 6., 7., 1 / 7.]
+# ROI_SCALE_FACTORS = [10., 10., 5.0, 5.0, 5.0]
+# ANCHOR_SCALE_FACTORS = None
+
+# ---------------------------------------------Anchor config [with FPN]
+LEVELS = ['P2', 'P3', 'P4', 'P5', 'P6']
+BASE_ANCHOR_SIZE_LIST = [32, 64, 128, 256, 512]  # P越高，RPN生成的anchor数越少，对应在原图中anchor的size也应该越大
+ANCHOR_STRIDE = [4, 8, 16, 32, 64]  # 5个stride，对应5个Feature Map的缩放比例(例如：stride=4表示P1相对于原图，size缩小为原来的1/4)
+ANCHOR_SCALES = [1.]
+ANCHOR_RATIOS = [0.5, 1., 2.0]
 ROI_SCALE_FACTORS = [10., 10., 5.0, 5.0, 5.0]
 ANCHOR_SCALE_FACTORS = None
 
@@ -90,13 +99,16 @@ RPN_IOU_NEGATIVE_THRESHOLD = 0.3
 TRAIN_RPN_CLOOBER_POSITIVES = False
 
 RPN_MINIBATCH_SIZE = 256
-RPN_POSITIVE_RATE = 0.5
+RPN_POSITIVE_RATE = 0.5  # RPN生成的minibatch anchor samples中，正样本所占比例（这里正:负=1:1）
 RPN_NMS_IOU_THRESHOLD = 0.7
 RPN_TOP_K_NMS_TRAIN = 12000
 RPN_MAXIMUM_PROPOSAL_TARIN = 2000
 
 RPN_TOP_K_NMS_TEST = 10000  # 5000
 RPN_MAXIMUM_PROPOSAL_TEST = 300  # 300
+
+# specific settings for FPN
+SHARE_HEADS = True
 
 
 # -------------------------------------------Fast-RCNN config

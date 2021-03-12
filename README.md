@@ -170,3 +170,7 @@ Some relevant achievements based on this code.
 		year={2018},
 		publisher={Multidisciplinary Digital Publishing Institute}
 	} 
+
+
+> About this repository:
+> 1. This code has 60+ mAP.(As the writer told.)

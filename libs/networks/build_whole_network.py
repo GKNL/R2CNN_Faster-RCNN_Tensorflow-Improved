@@ -176,9 +176,10 @@ class DetectionNetwork(object):
 
     def roi_pooling(self, feature_maps, rois, img_shape):
         '''
+        这里用的是ROI Warping(介于ROI Pooling和ROI Align之间：RoIWarp是将RoI量化到feature map上)
         Here use roi warping as roi_pooling
 
-        :param featuremaps_dict: feature map to crop  【A 4-D tensor of shape `[batch, image_height, image_width, depth]`】
+        :param featuremaps_dict: feature map to crop  【A 4-D tensor of shape `[batch, channel, image_height, image_width]`】
         :param rois: shape is [-1, 4]. [x1, y1, x2, y2]
         :return:
         '''
@@ -396,7 +397,7 @@ class DetectionNetwork(object):
 
         img_shape = tf.shape(input_img_batch)
 
-        # 1. build base network
+        # 1. build base network  提取特征图
         feature_to_cropped = self.build_base_network(input_img_batch)
 
         # 2. build rpn
