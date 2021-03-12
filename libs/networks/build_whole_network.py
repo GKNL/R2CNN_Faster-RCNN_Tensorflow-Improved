@@ -32,7 +32,16 @@ class DetectionNetwork(object):
     def build_base_network(self, input_img_batch):
 
         if self.base_network_name.startswith('resnet_v1'):
+            # 直接使用C4作为Feature Map
             return resnet.resnet_base(input_img_batch, scope_name=self.base_network_name, is_training=self.is_training)
+
+            # # 使用FPN提取出Feature Map list
+            # return resnet.resnet_feature_pyramid(input_img_batch, scope_name=self.base_network_name,
+            #                                      is_training=self.is_training)
+
+            # # 使用FPN提取出Feature Map list
+            # return resnet.resnet_dense_feature_pyramid(input_img_batch, scope_name=self.base_network_name,
+            #                                            is_training=self.is_training)
 
         elif self.base_network_name.startswith('MobilenetV2'):
             return mobilenet_v2.mobilenetv2_base(input_img_batch, is_training=self.is_training)
@@ -398,9 +407,10 @@ class DetectionNetwork(object):
         img_shape = tf.shape(input_img_batch)
 
         # 1. build base network  提取特征图
-        feature_to_cropped = self.build_base_network(input_img_batch)
+        feature_to_cropped = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
 
         # 2. build rpn
+        # TODO: 现在是针对于单张Feature Map进行操作计算RPN两个分支 -> 需要对每个level的Feature Map都进行操作
         with tf.variable_scope('build_rpn',
                                regularizer=slim.l2_regularizer(cfgs.WEIGHT_DECAY)):
 
@@ -422,6 +432,7 @@ class DetectionNetwork(object):
             rpn_cls_prob = slim.softmax(rpn_cls_score, scope='rpn_cls_prob')
 
         # 3. generate_anchors
+        # TODO: 现在是针对于单张Feature Map进行操作计算RPN生成的ANchors -> 需要对每个level的Feature Map都进行操作
         featuremap_height, featuremap_width = tf.shape(feature_to_cropped)[1], tf.shape(feature_to_cropped)[2]
         featuremap_height = tf.cast(featuremap_height, tf.float32)
         featuremap_width = tf.cast(featuremap_width, tf.float32)
