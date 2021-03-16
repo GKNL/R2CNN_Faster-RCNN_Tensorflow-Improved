@@ -48,7 +48,7 @@ def read_and_prepocess_single_img(filename_queue, shortside_len, is_training):
     """
     读取图片，并对图像进行处理与变换从而进行数据增强
     :param filename_queue: tf内部的queue类型，存放着全部的文件名
-    :param shortside_len: 图像较短一边（宽）的长度（这里为600）
+    :param shortside_len: 图像较短一边（宽）的长度
     :param is_training: 训练or测试
     :return:
     """
@@ -80,7 +80,7 @@ def next_batch(dataset_name, batch_size, shortside_len, is_training):
     '''
     assert batch_size == 1, "we only support batch_size is 1.We may support large batch_size in the future"
 
-    if dataset_name not in ['DOTA', 'ship', 'ICDAR2015', 'pascal', 'coco', 'DOTA_TOTAL', 'FDDB']:
+    if dataset_name not in ['DOTA', 'ship', 'ICDAR2015', 'pascal', 'coco', 'DOTA_TOTAL', 'FDDB', 'HRSC2016']:
         raise ValueError('dataSet name must be in pascal, coco spacenet and ship')
 
     if is_training:
@@ -98,6 +98,7 @@ def next_batch(dataset_name, batch_size, shortside_len, is_training):
     # 这里对图像进行处理与变换从而进行数据增强 ，返回的是[文件名，图片，坐标及标签，以及物体的个数]
     img_name, img, gtboxes_and_label, num_obs = read_and_prepocess_single_img(filename_queue, shortside_len,
                                                                               is_training=is_training)
+
     # 这里产生batch，队列最大等待数为1，单线程处理
     img_name_batch, img_batch, gtboxes_and_label_batch, num_obs_batch = \
         tf.train.batch(
@@ -110,32 +111,41 @@ def next_batch(dataset_name, batch_size, shortside_len, is_training):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '1'
+    # img_name_batch, img_batch, gtboxes_and_label_batch, num_objects_batch = \
+    #     next_batch(dataset_name=cfgs.DATASET_NAME,  # 'pascal', 'coco'
+    #                batch_size=cfgs.BATCH_SIZE,
+    #                shortside_len=cfgs.IMG_SHORT_SIDE_LEN,
+    #                is_training=True)
+    # gtboxes_and_label = tf.reshape(gtboxes_and_label_batch, [-1, 9])
+    #
+    # init_op = tf.group(
+    #     tf.global_variables_initializer(),
+    #     tf.local_variables_initializer()
+    # )
+    #
+    # config = tf.ConfigProto()
+    # config.gpu_options.allow_growth = True
+    #
+    # with tf.Session(config=config) as sess:
+    #     sess.run(init_op)
+    #
+    #     coord = tf.train.Coordinator()
+    #     threads = tf.train.start_queue_runners(sess, coord)
+    #
+    #     img_name_batch_, img_batch_, gtboxes_and_label_batch_, num_objects_batch_ \
+    #         = sess.run([img_name_batch, img_batch, gtboxes_and_label_batch, num_objects_batch])
+    #
+    #     print('debug')
+    #
+    #     coord.request_stop()
+    #     coord.join(threads)
     img_name_batch, img_batch, gtboxes_and_label_batch, num_objects_batch = \
-        next_batch(dataset_name=cfgs.DATASET_NAME,  # 'pascal', 'coco'
+        next_batch(dataset_name=cfgs.DATASET_NAME,
                    batch_size=cfgs.BATCH_SIZE,
                    shortside_len=cfgs.IMG_SHORT_SIDE_LEN,
                    is_training=True)
-    gtboxes_and_label = tf.reshape(gtboxes_and_label_batch, [-1, 9])
 
-    init_op = tf.group(
-        tf.global_variables_initializer(),
-        tf.local_variables_initializer()
-    )
-
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-
-    with tf.Session(config=config) as sess:
-        sess.run(init_op)
-
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess, coord)
-
-        img_name_batch_, img_batch_, gtboxes_and_label_batch_, num_objects_batch_ \
-            = sess.run([img_name_batch, img_batch, gtboxes_and_label_batch, num_objects_batch])
-
-        print('debug')
-
-        coord.request_stop()
-        coord.join(threads)
+    with tf.Session() as sess:
+        print(gtboxes_and_label_batch)  # Tensor("batch:2", shape=(1, ?, 9), dtype=int32)
+        print(tf.squeeze(gtboxes_and_label_batch, 0))  # Tensor("Squeeze_1:0", shape=(?, 9), dtype=int32)

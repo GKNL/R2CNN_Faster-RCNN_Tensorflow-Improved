@@ -173,4 +173,4 @@ Some relevant achievements based on this code.
 
 
 > About this repository:
-> 1. This code has 60+ mAP(on DOTA?).(As the writer told.)
+> 1. **mAP** of this R2CNN repo: "About 57.39, we now reach 62 or so through adding valid data and using data augmentation."(on DOTA test set).

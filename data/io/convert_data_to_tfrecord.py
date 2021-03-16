@@ -10,13 +10,13 @@ import cv2
 from libs.label_name_dict.label_dict import *
 from help_utils.tools import *
 
-tf.app.flags.DEFINE_string('VOC_dir', '/root/userfolder/yx/', 'Voc dir')
-tf.app.flags.DEFINE_string('xml_dir', 'icdar2015_xml', 'xml dir')
-tf.app.flags.DEFINE_string('image_dir', 'icdar2015_img', 'image dir')
+tf.app.flags.DEFINE_string('VOC_dir', '/home/20184868@software.com/PM/pycharmProjects/R2CNN_Faster-RCNN_Tensorflow-Improved/data/VOCdevkit/VOCdevkit_train/', 'Voc dir')
+tf.app.flags.DEFINE_string('xml_dir', 'Annotations', 'xml dir')
+tf.app.flags.DEFINE_string('image_dir', 'JPEGImages', 'image dir')
 tf.app.flags.DEFINE_string('save_name', 'train', 'save name')
 tf.app.flags.DEFINE_string('save_dir', '../tfrecord/', 'save name')
 tf.app.flags.DEFINE_string('img_format', '.jpg', 'format of image')
-tf.app.flags.DEFINE_string('dataset', 'ICDAR2015', 'dataset')
+tf.app.flags.DEFINE_string('dataset', 'HRSC2016', 'dataset')
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -56,7 +56,7 @@ def read_xml_gtbox_and_label(xml_path):
             label = None
             for child_item in child_of_root:
                 if child_item.tag == 'name':
-                    label = NAME_LABEL_MAP[child_item.text]
+                    label = NAME_LABEL_MAP[child_item.text]  # ship:1 , background:0
                 if child_item.tag == 'bndbox':
                     tmp_box = []
                     for node in child_item:
@@ -65,7 +65,7 @@ def read_xml_gtbox_and_label(xml_path):
                     tmp_box.append(label)
                     box_list.append(tmp_box)
 
-    gtbox_label = np.array(box_list, dtype=np.int32)
+    gtbox_label = np.array(box_list, dtype=np.int32)  # 该图中所有对象（如：舰船）的标注点集合
 
     return img_height, img_width, gtbox_label
 
@@ -97,13 +97,13 @@ def convert_pascal_to_tfrecord():
 
         feature = tf.train.Features(feature={
             # do not need encode() in linux
-            'img_name': _bytes_feature(img_name.encode()),
-            # 'img_name': _bytes_feature(img_name),
+            # 'img_name': _bytes_feature(img_name.encode()),
+            'img_name': _bytes_feature(img_name),
             'img_height': _int64_feature(img_height),
             'img_width': _int64_feature(img_width),
             'img': _bytes_feature(img.tostring()),
             'gtboxes_and_label': _bytes_feature(gtbox_label.tostring()),
-            'num_objects': _int64_feature(gtbox_label.shape[0])
+            'num_objects': _int64_feature(gtbox_label.shape[0])  # 该张图片中object的总数
         })
 
         example = tf.train.Example(features=feature)

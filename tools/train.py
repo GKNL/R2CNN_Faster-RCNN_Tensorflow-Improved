@@ -151,7 +151,7 @@ def train():
         sess.run(init_op)
         if not restorer is None:
             restorer.restore(sess, restore_ckpt)
-            print('restore model')
+            print('restore model success')
         coord = tf.train.Coordinator()
         threads = tf.train.start_queue_runners(sess, coord)
 

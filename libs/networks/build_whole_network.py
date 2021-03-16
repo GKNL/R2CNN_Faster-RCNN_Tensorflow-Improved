@@ -629,7 +629,7 @@ class DetectionNetwork(object):
                 print(20*"---")
             restorer = tf.train.Saver(restore_variables)
             print(20 * "****")
-            print("restore from pretrained_weighs in IMAGE_NET")
+            print("restore from pretrained_weights in IMAGE_NET")
         return restorer, checkpoint_path
 
     def get_gradients(self, optimizer, loss):
