@@ -34,7 +34,7 @@ TRAINED_CKPT = os.path.join(ROOT_PATH, 'output/trained_weights')
 
 EVALUATE_H_DIR = ROOT_PATH + '/output' + '/evaluate_h_result_pickle/' + VERSION
 EVALUATE_R_DIR = ROOT_PATH + '/output' + '/evaluate_r_result_pickle/' + VERSION
-TEST_ANNOTATION_PATH = '/mnt/USBB/gx/DOTA/DOTA_clip/val/labeltxt'
+TEST_ANNOTATION_PATH = '/home/20184868@software.com/PM/pycharmProjects/R2CNN_Faster-RCNN_Tensorflow-Improved/data/VOCdevkit/VOCdevkit_test/Annotations'
 
 # ------------------------------------------ Train config
 RESTORE_FROM_RPN = False

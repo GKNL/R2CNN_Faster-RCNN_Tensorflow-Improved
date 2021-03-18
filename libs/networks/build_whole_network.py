@@ -579,6 +579,7 @@ class DetectionNetwork(object):
                    final_boxes_r, final_scores_r, final_category_r, loss_dict
 
     def get_restorer(self):
+        # 检查最新的训练好的权重文件
         checkpoint_path = tf.train.latest_checkpoint(os.path.join(cfgs.TRAINED_CKPT, cfgs.VERSION))
 
         if checkpoint_path != None:

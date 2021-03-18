@@ -165,10 +165,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a R2CNN network')
     parser.add_argument('--img_dir', dest='img_dir',
                         help='images path',
-                        default='/mnt/USBB/gx/DOTA/DOTA_clip/val/images/', type=str)
+                        default='/home/20184868@software.com/PM/pycharmProjects/R2CNN_Faster-RCNN_Tensorflow-Improved/data/VOCdevkit/VOCdevkit_test/JPEGImages/', type=str)
     parser.add_argument('--image_ext', dest='image_ext',
                         help='image format',
-                        default='.png', type=str)
+                        default='.jpg', type=str)
     parser.add_argument('--test_annotation_path', dest='test_annotation_path',
                         help='test annotate path',
                         default=cfgs.TEST_ANNOTATION_PATH, type=str)

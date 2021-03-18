@@ -17,11 +17,11 @@ from xml.dom.minidom import parseString
 import glob
 
 # XML_ROOT_FOLDER = r'D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN-DFPN_RPN_HEAD_AROI\data\testHRSC\Annotations'
-XML_ROOT_FOLDER = r'G:\graduation_project_database\HRSC2016\HRSC2016\Train\Annotations'
-XML_DES_FOLDER = r'D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN_Faster-RCNN_Tensorflow-Improved\data\VOCdevkit\VOCdevkit_train\Annotations'
+XML_ROOT_FOLDER = r'G:\graduation_project_database\HRSC2016\HRSC2016\Test\Annotations'
+XML_DES_FOLDER = r'D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN_Faster-RCNN_Tensorflow-Improved\data\VOCdevkit\VOCdevkit_test\Annotations'
 # SRC_IMAGE_ROOT_FOLDER = r"D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN-DFPN_RPN_HEAD_AROI\data\testHRSC\images"
-SRC_IMAGE_ROOT_FOLDER = r'G:\graduation_project_database\HRSC2016\HRSC2016\Train\AllImages'
-DES_IMAGE_ROOT_FOLDER = r"D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN_Faster-RCNN_Tensorflow-Improved\data\VOCdevkit\VOCdevkit_train\JPEGImages"
+SRC_IMAGE_ROOT_FOLDER = r'G:\graduation_project_database\HRSC2016\HRSC2016\Test\AllImages'
+DES_IMAGE_ROOT_FOLDER = r"D:\ideaWorkPlace\Pycharm\graduation_project\R2CNN_Faster-RCNN_Tensorflow-Improved\data\VOCdevkit\VOCdevkit_test\JPEGImages"
 pi = 3.141592
 
 # 解析文件名出来
@@ -100,24 +100,24 @@ def WriterXMLFiles(filename, Points, Truncateds, Headers, width, height):
         node_difficult.text = '0'
         node_bndbox = SubElement(node_object, 'bndbox')
 
-        node_x1 = SubElement(node_bndbox, 'x1')
+        node_x1 = SubElement(node_bndbox, 'x0')
         node_x1.text = str(point[0])
-        node_y1 = SubElement(node_bndbox, 'y1')
+        node_y1 = SubElement(node_bndbox, 'y0')
         node_y1.text = str(point[1])
 
-        node_x2 = SubElement(node_bndbox, 'x2')
+        node_x2 = SubElement(node_bndbox, 'x1')
         node_x2.text = str(point[2])
-        node_y2 = SubElement(node_bndbox, 'y2')
+        node_y2 = SubElement(node_bndbox, 'y1')
         node_y2.text = str(point[3])
 
-        node_x3 = SubElement(node_bndbox, 'x3')
+        node_x3 = SubElement(node_bndbox, 'x2')
         node_x3.text = str(point[4])
-        node_y3 = SubElement(node_bndbox, 'y3')
+        node_y3 = SubElement(node_bndbox, 'y2')
         node_y3.text = str(point[5])
 
-        node_x4 = SubElement(node_bndbox, 'x4')
+        node_x4 = SubElement(node_bndbox, 'x3')
         node_x4.text = str(point[6])
-        node_y4 = SubElement(node_bndbox, 'y4')
+        node_y4 = SubElement(node_bndbox, 'y3')
         node_y4.text = str(point[7])
 
         # node_xmin = SubElement(node_bndbox, 'xmin')

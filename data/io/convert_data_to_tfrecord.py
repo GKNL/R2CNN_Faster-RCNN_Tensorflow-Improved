@@ -62,7 +62,7 @@ def read_xml_gtbox_and_label(xml_path):
                     for node in child_item:
                         tmp_box.append(int(node.text))
                     assert label is not None, 'label is none, error'
-                    tmp_box.append(label)
+                    tmp_box.append(label)  # 这一个object的标注点list：[x1, y1, x2, y2, x3, y3, x4, y4, label]
                     box_list.append(tmp_box)
 
     gtbox_label = np.array(box_list, dtype=np.int32)  # 该图中所有对象（如：舰船）的标注点集合
@@ -90,7 +90,7 @@ def convert_pascal_to_tfrecord():
             print('{} is not exist!'.format(img_path))
             continue
 
-        img_height, img_width, gtbox_label = read_xml_gtbox_and_label(xml)
+        img_height, img_width, gtbox_label = read_xml_gtbox_and_label(xml)  # 读取xml文件中的标注点以及图片信息
 
         # img = np.array(Image.open(img_path))
         img = cv2.imread(img_path)
