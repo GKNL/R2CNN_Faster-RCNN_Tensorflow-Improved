@@ -9,6 +9,7 @@ import numpy as np
 
 from libs.networks import resnet
 from libs.networks import mobilenet_v2
+from libs.networks.rpn import rpn_utils
 from libs.box_utils import encode_and_decode
 from libs.box_utils import boxes_utils
 from libs.box_utils import anchor_utils
@@ -19,6 +20,7 @@ from libs.detection_oprations.proposal_opr import postprocess_rpn_proposals
 from libs.detection_oprations.anchor_target_layer_without_boxweight import anchor_target_layer
 from libs.detection_oprations.proposal_target_layer import proposal_target_layer
 from libs.box_utils import nms_rotate
+from libs.models import neck_fpn, scrdet_neck
 
 
 class DetectionNetwork(object):
@@ -32,8 +34,31 @@ class DetectionNetwork(object):
     def build_base_network(self, input_img_batch):
 
         if self.base_network_name.startswith('resnet_v1'):
+
+            feature_dict = resnet.resnet_dict(input_img_batch, scope_name=self.base_network_name, is_training=self.is_training)
+
+            if cfgs.FPN_MODE == 'FPN':  # 使用普通版FPN提取Feature Map [返回结果为feature map list]
+                fpn_func = neck_fpn.NeckFPN(cfgs)
+                feature_maps = fpn_func.fpn(feature_dict, self.is_training)
+
+            elif cfgs.FPN_MODE == 'DFPN':  # 使用DFPN提取Feature Map [返回结果为feature map list]
+                fpn_func = neck_fpn.NeckFPN(cfgs)
+                feature_maps = fpn_func.dense_fpn(feature_dict, self.is_training)
+
+            elif cfgs.FPN_MODE == 'SCRDet':  # 使用SF-Net + MDA-Net提取Feature Map [返回结果为单张feature map]
+                fpn_func = scrdet_neck.NeckSCRDet(cfgs)
+                feature_maps = fpn_func.scrdet_fpn(feature_dict, self.is_training)
+
+            elif cfgs.FPN_MODE == 'Resnet_C4':  # 直接使用Resnet的C4作为Feature Map
+                feature_maps = resnet.resnet_base(input_img_batch, scope_name=self.base_network_name,
+                                                  is_training=self.is_training)
+            else:
+                raise Exception('only support [DFPN, FPN, SCRDet, Resnet C4]')
+
+            return feature_maps
+
             # 直接使用C4作为Feature Map
-            return resnet.resnet_base(input_img_batch, scope_name=self.base_network_name, is_training=self.is_training)
+            # return resnet.resnet_base(input_img_batch, scope_name=self.base_network_name, is_training=self.is_training)
 
             # # 使用FPN提取出Feature Map list
             # return resnet.resnet_feature_pyramid(input_img_batch, scope_name=self.base_network_name,
@@ -310,6 +335,7 @@ class DetectionNetwork(object):
     def build_loss(self, rpn_box_pred, rpn_bbox_targets, rpn_cls_score, rpn_labels,
                    bbox_pred_h, bbox_targets_h, cls_score_h, bbox_pred_r, bbox_targets_r, cls_score_r, labels):
         '''
+        计算loss值
 
         :param rpn_box_pred: [-1, 4]
         :param rpn_bbox_targets: [-1, 4]
@@ -407,29 +433,40 @@ class DetectionNetwork(object):
         img_shape = tf.shape(input_img_batch)
 
         # 1. build base network  提取特征图
-        feature_to_cropped = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
+        feature_maps = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
 
         # 2. build rpn
         # TODO: 现在是针对于单张Feature Map进行操作计算RPN两个分支 -> 需要对每个level的Feature Map都进行操作
-        with tf.variable_scope('build_rpn',
-                               regularizer=slim.l2_regularizer(cfgs.WEIGHT_DECAY)):
+        # with tf.variable_scope('build_rpn',
+        #                        regularizer=slim.l2_regularizer(cfgs.WEIGHT_DECAY)):
+        #
+        #     rpn_conv3x3 = slim.conv2d(
+        #         feature_to_cropped, 512, [3, 3],
+        #         trainable=self.is_training, weights_initializer=cfgs.INITIALIZER,
+        #         activation_fn=tf.nn.relu,
+        #         scope='rpn_conv/3x3')
+        #     rpn_cls_score = slim.conv2d(rpn_conv3x3, self.num_anchors_per_location*2, [1, 1], stride=1,
+        #                                 trainable=self.is_training, weights_initializer=cfgs.INITIALIZER,
+        #                                 activation_fn=None,
+        #                                 scope='rpn_cls_score')
+        #     rpn_box_pred = slim.conv2d(rpn_conv3x3, self.num_anchors_per_location*4, [1, 1], stride=1,
+        #                                trainable=self.is_training, weights_initializer=cfgs.BBOX_INITIALIZER,
+        #                                activation_fn=None,
+        #                                scope='rpn_bbox_pred')
+        #     rpn_box_pred = tf.reshape(rpn_box_pred, [-1, 4])
+        #     rpn_cls_score = tf.reshape(rpn_cls_score, [-1, 2])
+        #     rpn_cls_prob = slim.softmax(rpn_cls_score, scope='rpn_cls_prob')
 
-            rpn_conv3x3 = slim.conv2d(
-                feature_to_cropped, 512, [3, 3],
-                trainable=self.is_training, weights_initializer=cfgs.INITIALIZER,
-                activation_fn=tf.nn.relu,
-                scope='rpn_conv/3x3')
-            rpn_cls_score = slim.conv2d(rpn_conv3x3, self.num_anchors_per_location*2, [1, 1], stride=1,
-                                        trainable=self.is_training, weights_initializer=cfgs.INITIALIZER,
-                                        activation_fn=None,
-                                        scope='rpn_cls_score')
-            rpn_box_pred = slim.conv2d(rpn_conv3x3, self.num_anchors_per_location*4, [1, 1], stride=1,
-                                       trainable=self.is_training, weights_initializer=cfgs.BBOX_INITIALIZER,
-                                       activation_fn=None,
-                                       scope='rpn_bbox_pred')
-            rpn_box_pred = tf.reshape(rpn_box_pred, [-1, 4])
-            rpn_cls_score = tf.reshape(rpn_cls_score, [-1, 2])
-            rpn_cls_prob = slim.softmax(rpn_cls_score, scope='rpn_cls_prob')
+        if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":
+            rpn_box_pred, rpn_cls_score, rpn_cls_prob = rpn_utils.build_rpn_with_feature_pyramid(cfgs,
+                                                                                                 feature_maps,
+                                                                                                 self.is_training,
+                                                                                                 self.num_anchors_per_location)
+        else:
+            rpn_box_pred, rpn_cls_score, rpn_cls_prob = rpn_utils.build_rpn_with_single_feature_map(cfgs,
+                                                                                                    feature_maps,
+                                                                                                    self.is_training,
+                                                                                                    self.num_anchors_per_location)
 
         # 3. generate_anchors
         # TODO: 现在是针对于单张Feature Map进行操作计算RPN生成的ANchors -> 需要对每个level的Feature Map都进行操作
@@ -580,7 +617,8 @@ class DetectionNetwork(object):
 
     def get_restorer(self):
         # 检查最新的训练好的权重文件
-        checkpoint_path = tf.train.latest_checkpoint(os.path.join(cfgs.TRAINED_CKPT, cfgs.VERSION))
+        # checkpoint_path = tf.train.latest_checkpoint(os.path.join(cfgs.TRAINED_CKPT, cfgs.VERSION))
+        checkpoint_path = "../output/trained_weights/R2CNN_20210316_HRSC2016_v1/voc_63000model.ckpt"  # 测试使用
 
         if checkpoint_path != None:
             if cfgs.RESTORE_FROM_RPN:

@@ -73,6 +73,12 @@ INITIALIZER = tf.random_normal_initializer(mean=0.0, stddev=0.01)
 BBOX_INITIALIZER = tf.random_normal_initializer(mean=0.0, stddev=0.001)
 WEIGHT_DECAY = 0.0001
 
+# specific settings for FPN
+SHARE_HEADS = True
+FPN_MODE = 'FPN'  # 多张Feature Maps: 'DFPN', 'FPN';  单张Feature Map: 'SCRDet', 'Resnet C4'
+ADD_GLOBAL_CTX = False
+FPN_CHANNEL = 512  # MDA-Net的Channel Attention分支参数
+
 
 # ---------------------------------------------Anchor config [without FPN]
 BASE_ANCHOR_SIZE_LIST = [256]  # can be modified
@@ -107,8 +113,6 @@ RPN_MAXIMUM_PROPOSAL_TARIN = 2000
 RPN_TOP_K_NMS_TEST = 10000  # 5000
 RPN_MAXIMUM_PROPOSAL_TEST = 300  # 300
 
-# specific settings for FPN
-SHARE_HEADS = True
 
 
 # -------------------------------------------Fast-RCNN config

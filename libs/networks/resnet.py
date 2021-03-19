@@ -123,6 +123,90 @@ def restnet_head(input, is_training, scope_name):
     return C5_flatten
 
 
+def resnet_dict(img_batch, scope_name, is_training=True):
+    """
+    类似于resnet_base，但是最后返回的是所有层feature组成的dict（resnet_base方法仅返回了C4层）
+    :param img_batch:
+    :param scope_name:
+    :param is_training:
+    :return:
+    """
+    if scope_name == 'resnet_v1_50':
+        middle_num_units = 6
+    elif scope_name == 'resnet_v1_101':
+        middle_num_units = 23
+    else:
+        raise NotImplementedError('We only support resnet_v1_50 or resnet_v1_101. ')
+
+    blocks = [resnet_v1_block('block1', base_depth=64, num_units=3, stride=2),
+              resnet_v1_block('block2', base_depth=128, num_units=4, stride=2),
+              resnet_v1_block('block3', base_depth=256, num_units=middle_num_units, stride=2),
+              resnet_v1_block('block4', base_depth=512, num_units=3, stride=1)]
+    # when use fpn . stride list is [1, 2, 2]
+
+    with slim.arg_scope(resnet_arg_scope(is_training=False)):
+        with tf.variable_scope(scope_name, scope_name):
+            # Do the first few layers manually, because 'SAME' padding can behave inconsistently
+            # for images of different sizes: sometimes 0, sometimes 1
+            net = resnet_utils.conv2d_same(
+                img_batch, 64, 7, stride=2, scope='conv1')
+            net = tf.pad(net, [[0, 0], [1, 1], [1, 1], [0, 0]])
+            net = slim.max_pool2d(
+                net, [3, 3], stride=2, padding='VALID', scope='pool1')
+
+    not_freezed = [False] * cfgs.FIXED_BLOCKS + (4 - cfgs.FIXED_BLOCKS) * [True]
+    # Fixed_Blocks can be 1~3
+
+    with slim.arg_scope(resnet_arg_scope(is_training=(is_training and not_freezed[0]))):
+        C2, end_points_C2 = resnet_v1.resnet_v1(net,
+                                                blocks[0:1],
+                                                global_pool=False,
+                                                include_root_block=False,
+                                                scope=scope_name)
+
+    # C2 = tf.Print(C2, [tf.shape(C2)], summarize=10, message='C2_shape')
+    # self.add_heatmap(C2, name='Layer2/C2_heat')
+
+    with slim.arg_scope(resnet_arg_scope(is_training=(is_training and not_freezed[1]))):
+        C3, end_points_C3 = resnet_v1.resnet_v1(C2,
+                                                blocks[1:2],
+                                                global_pool=False,
+                                                include_root_block=False,
+                                                scope=scope_name)
+
+    # C3 = tf.Print(C3, [tf.shape(C3)], summarize=10, message='C3_shape')
+    # self.add_heatmap(C3, name='Layer3/C3_heat')
+    with slim.arg_scope(resnet_arg_scope(is_training=(is_training and not_freezed[2]))):
+        C4, end_points_C4 = resnet_v1.resnet_v1(C3,
+                                                blocks[2:3],
+                                                global_pool=False,
+                                                include_root_block=False,
+                                                scope=scope_name)
+
+    # self.add_heatmap(C4, name='Layer4/C4_heat')
+
+    # C4 = tf.Print(C4, [tf.shape(C4)], summarize=10, message='C4_shape')
+    with slim.arg_scope(resnet_arg_scope(is_training=is_training)):
+        C5, end_points_C5 = resnet_v1.resnet_v1(C4,
+                                                blocks[3:4],
+                                                global_pool=False,
+                                                include_root_block=False,
+                                                scope=scope_name)
+    # C5 = tf.Print(C5, [tf.shape(C5)], summarize=10, message='C5_shape')
+    # self.add_heatmap(C5, name='Layer5/C5_heat')
+
+    feature_dict = {'C2': end_points_C2['{}/block1/unit_2/bottleneck_v1'.format(scope_name)],
+                    'C3': end_points_C3['{}/block2/unit_3/bottleneck_v1'.format(scope_name)],
+                    'C4': end_points_C4['{}/block3/unit_{}/bottleneck_v1'.format(scope_name, middle_num_units - 1)],
+                    'C5': end_points_C5['{}/block4/unit_3/bottleneck_v1'.format(scope_name)],
+                    # 'C5': end_points_C5['{}/block4'.format(scope_name)],
+                    }
+
+    return feature_dict
+
+
+
+
 # ***********************************************************************************************
 # *                                  Standard FPN (By PM)                                       *
 # ***********************************************************************************************
@@ -278,7 +362,7 @@ def resnet_feature_pyramid(img_batch, scope_name, is_training=True):
                 pyramid_dict['P%d' % level] = fusion_two_layer(C_i=feature_dict["C%d" % level],
                                                                P_j=pyramid_dict["P%d" % (level + 1)],
                                                                scope='build_P%d' % level)
-            for level in range(4, 1, -1):  # 对Mi特征图再经过3 x 3卷积(减轻最近邻近插值带来的混叠影响，周围的数都相同)，得到最终的Pi
+            for level in range(5, 1, -1):  # 对Mi特征图再经过3 x 3卷积(减轻最近邻近插值带来的混叠影响，周围的数都相同)，得到最终的Pi
                 pyramid_dict['P%d' % level] = slim.conv2d(pyramid_dict['P%d' % level],
                                                           num_outputs=256, kernel_size=[3, 3], padding="SAME",
                                                           stride=1, scope="fuse_P%d" % level)
