@@ -81,21 +81,21 @@ FPN_CHANNEL = 512  # MDA-Net的Channel Attention分支参数
 
 
 # ---------------------------------------------Anchor config [without FPN]
-BASE_ANCHOR_SIZE_LIST = [256]  # can be modified
-ANCHOR_STRIDE = [16]  # can not be modified in most situations
-ANCHOR_SCALES = [0.125, 0.25, 0.5, 1., 2.0]  # 决定anchor的size大小（base_size * scale）
-ANCHOR_RATIOS = [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5.]  # [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5., 6., 1 / 6., 7., 1 / 7.]
-ROI_SCALE_FACTORS = [10., 10., 5.0, 5.0, 5.0]
-ANCHOR_SCALE_FACTORS = None
-
-# # ---------------------------------------------Anchor config [with FPN]
-# LEVELS = ['P2', 'P3', 'P4', 'P5', 'P6']
-# BASE_ANCHOR_SIZE_LIST = [32, 64, 128, 256, 512]  # P越高，RPN生成的anchor数越少，对应在原图中anchor的size也应该越大
-# ANCHOR_STRIDE = [4, 8, 16, 32, 64]  # 5个stride，对应5个Feature Map的缩放比例(例如：stride=4表示P1相对于原图，size缩小为原来的1/4)
-# ANCHOR_SCALES = [1.]
-# ANCHOR_RATIOS = [0.5, 1., 2.0, 1/3., 3.]
+# BASE_ANCHOR_SIZE_LIST = [256]  # can be modified
+# ANCHOR_STRIDE = [16]  # can not be modified in most situations
+# ANCHOR_SCALES = [0.125, 0.25, 0.5, 1., 2.0]  # 决定anchor的size大小（base_size * scale）
+# ANCHOR_RATIOS = [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5.]  # [1, 1 / 2, 2., 1 / 3., 3., 5., 1 / 4., 4., 1 / 5., 6., 1 / 6., 7., 1 / 7.]
 # ROI_SCALE_FACTORS = [10., 10., 5.0, 5.0, 5.0]
 # ANCHOR_SCALE_FACTORS = None
+
+# ---------------------------------------------Anchor config [with FPN]
+LEVELS = ['P2', 'P3', 'P4', 'P5', 'P6']
+BASE_ANCHOR_SIZE_LIST = [32, 64, 128, 256, 512]  # P越高，RPN生成的anchor数越少，对应在原图中anchor的size也应该越大
+ANCHOR_STRIDE_LIST = [4, 8, 16, 32, 64]  # 5个stride，对应5个Feature Map的缩放比例(例如：stride=4表示P1相对于原图，size缩小为原来的1/4)
+ANCHOR_SCALES = [1.]
+ANCHOR_RATIOS = [0.5, 1., 2.0, 1/3., 3.]
+ROI_SCALE_FACTORS = [10., 10., 5.0, 5.0, 5.0]
+ANCHOR_SCALE_FACTORS = None
 
 
 # --------------------------------------------RPN config

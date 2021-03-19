@@ -33,7 +33,7 @@ def postprocess_rpn_proposals(rpn_bbox_pred, rpn_cls_prob, img_shape, anchors, i
 
     cls_prob = rpn_cls_prob[:, 1]
 
-    # 1. decode boxes
+    # 1. decode boxes  根据anchor box的[x,y,w,h]和RPN回归分支输出的平移变换t_x*,t_y*和缩放尺度t_w*,t_h*，计算得出的pred box (即RPN回归分支得到的pred box)
     decode_boxes = encode_and_decode.decode_boxes(encode_boxes=rpn_bbox_pred,
                                                   reference_boxes=anchors,
                                                   scale_factors=cfgs.ANCHOR_SCALE_FACTORS)
@@ -46,20 +46,20 @@ def postprocess_rpn_proposals(rpn_bbox_pred, rpn_cls_prob, img_shape, anchors, i
     decode_boxes = boxes_utils.clip_boxes_to_img_boundaries(decode_boxes=decode_boxes,
                                                             img_shape=img_shape)
 
-    # 3. get top N to NMS
+    # 3. get top N to NMS   根据scores返回最高的几个框
     if pre_nms_topN > 0:
         pre_nms_topN = tf.minimum(pre_nms_topN, tf.shape(decode_boxes)[0], name='avoid_unenough_boxes')
         cls_prob, top_k_indices = tf.nn.top_k(cls_prob, k=pre_nms_topN)
         decode_boxes = tf.gather(decode_boxes, top_k_indices)
 
-    # 4. NMS
+    # 4. NMS  然后对这几个框根据IOU（大于0.7的视为不错）进行NMS处理
     keep = tf.image.non_max_suppression(
         boxes=decode_boxes,
         scores=cls_prob,
         max_output_size=post_nms_topN,
         iou_threshold=nms_thresh)
 
-    final_boxes = tf.gather(decode_boxes, keep)
+    final_boxes = tf.gather(decode_boxes, keep)  # 最终RPN生成的proposals
     final_probs = tf.gather(cls_prob, keep)
 
     return final_boxes, final_probs

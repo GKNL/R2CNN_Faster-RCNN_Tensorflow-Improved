@@ -86,7 +86,7 @@ def draw_box_with_color_rotate(img_batch, boxes, text):
     return img_tensor_with_boxes
 
 
-def draw_boxes_with_categories(img_batch, boxes, scores):
+def draw_boxes_with_categories(img_batch, boxes, scores):  # 写错了，应该是draw_boxes_with_scores
 
     def draw_box_cv(img, boxes, scores):
         img = img + np.array(cfgs.PIXEL_MEAN)

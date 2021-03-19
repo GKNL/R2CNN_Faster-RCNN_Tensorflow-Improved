@@ -332,6 +332,39 @@ class DetectionNetwork(object):
         tf.summary.image('pos_rois', pos_in_img)
         tf.summary.image('neg_rois', neg_in_img)
 
+    def make_anchors(self, feature_maps):
+        if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":  # Feature Pyramid，需要迭代各层以生成anchors
+            all_anchors = []
+            for i in range(len(cfgs.LEVELS)):
+                level_name, p = cfgs.LEVELS[i], feature_maps[i]
+
+                p_h, p_w = tf.shape(p)[1], tf.shape(p)[2]
+                featuremap_height = tf.cast(p_h, tf.float32)
+                featuremap_width = tf.cast(p_w, tf.float32)
+                anchors = anchor_utils.make_anchors(base_anchor_size=cfgs.BASE_ANCHOR_SIZE_LIST[i],
+                                                    anchor_scales=cfgs.ANCHOR_SCALES,
+                                                    anchor_ratios=cfgs.ANCHOR_RATIOS,
+                                                    featuremap_height=featuremap_height,
+                                                    featuremap_width=featuremap_width,
+                                                    stride=cfgs.ANCHOR_STRIDE_LIST[i],
+                                                    name="make_anchors_for%s" % level_name)
+                all_anchors.append(anchors)
+            all_anchors = tf.concat(all_anchors, axis=0, name='all_anchors_of_FPN')
+            return all_anchors
+        else:  # 单层Feature Map，无需迭代
+            featuremap_height, featuremap_width = tf.shape(feature_maps)[1], tf.shape(feature_maps)[2]
+            featuremap_height = tf.cast(featuremap_height, tf.float32)
+            featuremap_width = tf.cast(featuremap_width, tf.float32)
+
+            anchors = anchor_utils.make_anchors(base_anchor_size=cfgs.BASE_ANCHOR_SIZE_LIST[0],
+                                                anchor_scales=cfgs.ANCHOR_SCALES, anchor_ratios=cfgs.ANCHOR_RATIOS,
+                                                featuremap_height=featuremap_height,
+                                                featuremap_width=featuremap_width,
+                                                stride=cfgs.ANCHOR_STRIDE,
+                                                name="make_anchors_forRPN")
+            return anchors
+
+
     def build_loss(self, rpn_box_pred, rpn_bbox_targets, rpn_cls_score, rpn_labels,
                    bbox_pred_h, bbox_targets_h, cls_score_h, bbox_pred_r, bbox_targets_r, cls_score_r, labels):
         '''
@@ -436,7 +469,8 @@ class DetectionNetwork(object):
         feature_maps = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
 
         # 2. build rpn
-        # TODO: 现在是针对于单张Feature Map进行操作计算RPN两个分支 -> 需要对每个level的Feature Map都进行操作
+        # Done: 现在是针对于单张Feature Map进行操作计算RPN两个分支 -> 需要对每个level的Feature Map都进行操作
+
         # with tf.variable_scope('build_rpn',
         #                        regularizer=slim.l2_regularizer(cfgs.WEIGHT_DECAY)):
         #
@@ -457,6 +491,7 @@ class DetectionNetwork(object):
         #     rpn_cls_score = tf.reshape(rpn_cls_score, [-1, 2])
         #     rpn_cls_prob = slim.softmax(rpn_cls_score, scope='rpn_cls_prob')
 
+        # 计算RPN两个分支的输出值（分类分支和回归分支）
         if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":
             rpn_box_pred, rpn_cls_score, rpn_cls_prob = rpn_utils.build_rpn_with_feature_pyramid(cfgs,
                                                                                                  feature_maps,
@@ -469,31 +504,13 @@ class DetectionNetwork(object):
                                                                                                     self.num_anchors_per_location)
 
         # 3. generate_anchors
-        # TODO: 现在是针对于单张Feature Map进行操作计算RPN生成的ANchors -> 需要对每个level的Feature Map都进行操作
-        featuremap_height, featuremap_width = tf.shape(feature_to_cropped)[1], tf.shape(feature_to_cropped)[2]
-        featuremap_height = tf.cast(featuremap_height, tf.float32)
-        featuremap_width = tf.cast(featuremap_width, tf.float32)
-
-        anchors = anchor_utils.make_anchors(base_anchor_size=cfgs.BASE_ANCHOR_SIZE_LIST[0],
-                                            anchor_scales=cfgs.ANCHOR_SCALES, anchor_ratios=cfgs.ANCHOR_RATIOS,
-                                            featuremap_height=featuremap_height,
-                                            featuremap_width=featuremap_width,
-                                            stride=cfgs.ANCHOR_STRIDE,
-                                            name="make_anchors_forRPN")
-
-        # with tf.variable_scope('make_anchors'):
-        #     anchors = anchor_utils.make_anchors(height=featuremap_height,
-        #                                         width=featuremap_width,
-        #                                         feat_stride=cfgs.ANCHOR_STRIDE[0],
-        #                                         anchor_scales=cfgs.ANCHOR_SCALES,
-        #                                         anchor_ratios=cfgs.ANCHOR_RATIOS, base_size=16
-        #                                         )
+        # Done: 现在是针对于单张Feature Map进行操作计算RPN生成的Anchors -> 需要对每个level的Feature Map都进行操作
+        anchors = self.make_anchors(feature_maps)
 
         # 4. postprocess rpn proposals. such as: decode, clip, NMS  【RPN后处理阶段】
         with tf.variable_scope('postprocess_RPN'):
-            # rpn_cls_prob = tf.reshape(rpn_cls_score, [-1, 2])
-            # rpn_cls_prob = slim.softmax(rpn_cls_prob, scope='rpn_cls_prob')
-            # rpn_box_pred = tf.reshape(rpn_box_pred, [-1, 4])
+
+            # 最终RPN生成的proposals及其对应的分数
             rois, roi_scores = postprocess_rpn_proposals(rpn_bbox_pred=rpn_box_pred,
                                                          rpn_cls_prob=rpn_cls_prob,
                                                          img_shape=img_shape,
@@ -517,14 +534,21 @@ class DetectionNetwork(object):
                 tf.summary.image('score_greater_05_rois', score_gre_05_in_img)
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        if self.is_training:
+
+        ######################################################################################################
+        #                                         sample minibatch
+        # (分别sample出两批minibatch：一批用于RPN回归[只需要水平gt样本]，一批用于Fast RCNN回归[需要水平和旋转gt样本])
+        ######################################################################################################
+
+        if self.is_training:  # sample minibatch  读取用于RPN回归的小批量anchor样本。（后续根据gt和RPN输出的anchors计算平移和缩放因子）
             with tf.variable_scope('sample_anchors_minibatch'):
+                # ground truth的坐标和对应标签
                 rpn_labels, rpn_bbox_targets = \
                     tf.py_func(
                         anchor_target_layer,
                         [gtboxes_h_batch, img_shape, anchors],
                         [tf.float32, tf.float32])
-                rpn_bbox_targets = tf.reshape(rpn_bbox_targets, [-1, 4])
+                rpn_bbox_targets = tf.reshape(rpn_bbox_targets, [-1, 4])  # gt target object的坐标：[x*,y*,w*,h*]
                 rpn_labels = tf.to_int32(rpn_labels, name="to_int32")
                 rpn_labels = tf.reshape(rpn_labels, [-1])
                 self.add_anchor_img_smry(input_img_batch, anchors, rpn_labels)
@@ -538,7 +562,9 @@ class DetectionNetwork(object):
             tf.summary.scalar('ACC/rpn_accuracy', acc)
 
             with tf.control_dependencies([rpn_labels]):
-                with tf.variable_scope('sample_RCNN_minibatch'):
+                with tf.variable_scope('sample_RCNN_minibatch'):  # 读取用于Fast RCNN回归的小批量样本
+                    # (bbox_targets_h是水平回归分支，可以去掉这个分支)
+                    # 对这些sample出来的minibatch，找到它们对应的gt target
                     rois, labels, bbox_targets_h, bbox_targets_r = \
                     tf.py_func(proposal_target_layer,
                                [rois, gtboxes_h_batch, gtboxes_r_batch],
@@ -551,14 +577,25 @@ class DetectionNetwork(object):
                     bbox_targets_r = tf.reshape(bbox_targets_r, [-1, 5*(cfgs.CLASS_NUM+1)])
                     self.add_roi_batch_img_smry(input_img_batch, rois, labels)
 
+
+        # assign level   对RPN生成的proposals（ROIs）进行一个分类，找出它们各自来自于FPN的哪一层
+        if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":
+            if self.is_training:
+                rois_list, labels, bbox_targets = self.assign_levels(all_rois=rois,
+                                                                     labels=labels,
+                                                                     bbox_targets=bbox_targets_r)
+            else:
+                rois_list = self.assign_levels(all_rois=rois)  # rois_list: [P2_rois, P3_rois, P4_rois, P5_rois]
+
         # -------------------------------------------------------------------------------------------------------------#
         #                                            Fast-RCNN                                                         #
         # -------------------------------------------------------------------------------------------------------------#
 
         # 5. build Fast-RCNN
+        # TODO:change to adapt to FPN.(其实就是ROI Pooling处需要加个循环)
         # rois = tf.Print(rois, [tf.shape(rois)], 'rois shape', summarize=10)
         bbox_pred_h, cls_score_h, bbox_pred_r, cls_score_r = self.build_fastrcnn(feature_to_cropped=feature_to_cropped,
-                                                                                 rois=rois,
+                                                                                 rois=rois,  # RPN生成的proposals
                                                                                  img_shape=img_shape)
         # bbox_pred shape: [-1, 4*(cls_num+1)].
         # cls_score shape： [-1, cls_num+1]
