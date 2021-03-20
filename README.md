@@ -7,7 +7,7 @@ It should be noted that we did not re-implementate exactly as the paper and just
 This project is based on [Faster-RCNN](https://github.com/DetectionTeamUCAS/Faster-RCNN_Tensorflow), and completed by [YangXue](https://github.com/yangxue0827) and [YangJirui](https://github.com/yangJirui).
 
 > Some changes planned on this project by myself:
-> 1. Add DFPN Network to extract feature map.
+> 1. Add DFPN Network to extract feature map.(Finished)
 > 2. Replace the ROI Pooling by RROI Align.
 > 3. Try to complete the code of AO-RPN and Multi-head Network.(Reference:[【MRDet】A Multi-Head Network for Accurate Oriented Object Detection in Aerial Images](https://arxiv.org/abs/2012.13135))
 
