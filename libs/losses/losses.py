@@ -132,3 +132,26 @@ def sum_ohem_loss(cls_score, label, bbox_pred, bbox_targets,
                   nr_ohem_sampling, nr_classes, sigma=1.0):
 
     raise NotImplementedError('not implement Now. YJR will implemetn in the future')
+
+
+def build_attention_loss(mask, featuremap):
+    """
+    SCRDet中的Attention Loss
+    :param mask:
+    :param featuremap:
+    :return:
+    """
+    # shape = mask.get_shape().as_list()
+    shape = tf.shape(mask)
+    featuremap = tf.image.resize_bilinear(featuremap, [shape[0], shape[1]])
+    # shape = tf.shape(featuremap)
+    # mask = tf.expand_dims(mask, axis=0)
+    # mask = tf.image.resize_bilinear(mask, [shape[1], shape[2]])
+    # mask = tf.squeeze(mask, axis=0)
+
+    mask = tf.cast(mask, tf.int32)
+    mask = tf.reshape(mask, [-1, ])
+    featuremap = tf.reshape(featuremap, [-1, 2])
+    attention_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=mask, logits=featuremap)
+    attention_loss = tf.reduce_mean(attention_loss)
+    return attention_loss

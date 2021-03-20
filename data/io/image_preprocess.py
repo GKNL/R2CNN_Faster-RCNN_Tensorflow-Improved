@@ -5,6 +5,8 @@ from __future__ import print_function
 from __future__ import division
 
 import tensorflow as tf
+import numpy as np
+import cv2
 
 
 def short_side_resize(img_tensor, gtboxes_and_label, target_shortside_len):
@@ -68,3 +70,19 @@ def random_flip_left_right(img_tensor, gtboxes_and_label):
     return img_tensor,  gtboxes_and_label
 
 
+def get_mask(img, boxes):
+    """
+    SCRDet中计算Attention Loss的输入
+    :param img:
+    :param boxes:
+    :return:
+    """
+    h, w, _ = img.shape
+    mask = np.zeros([h, w])
+    for b in boxes:
+        b = np.reshape(b[0:-1], [4, 2])
+        rect = np.array(b, np.int32)
+        cv2.fillConvexPoly(mask, rect, 1)
+    # mask = cv2.resize(mask, dsize=(h // 16, w // 16))
+    mask = np.expand_dims(mask, axis=-1)
+    return np.array(mask, np.float32)

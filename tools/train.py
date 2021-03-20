@@ -13,6 +13,7 @@ import time
 
 from libs.networks import build_whole_network
 from data.io.read_tfrecord import next_batch
+from data.io import image_preprocess
 from help_utils import tools
 from libs.box_utils.coordinate_convert import back_forward_convert
 from libs.box_utils.boxes_utils import get_horizen_minAreaRectangle
@@ -34,6 +35,12 @@ def train():
                        batch_size=cfgs.BATCH_SIZE,
                        shortside_len=cfgs.IMG_SHORT_SIDE_LEN,
                        is_training=True)
+
+        # SCRDet中计算Attention Loss的输入
+        mask_batch = tf.py_func(image_preprocess.get_mask,
+                                [tf.squeeze(img_batch, 0),
+                                 tf.squeeze(gtboxes_and_label_batch, 0)],
+                                [tf.float32])
 
         gtboxes_and_label = tf.py_func(back_forward_convert,  # 将8点坐标转化为5点坐标表示([y_c, x_c, h, w, theta, (label)])
                                        inp=[tf.squeeze(gtboxes_and_label_batch, 0)],  # tf.squeeze()：如果指定维度的维度大小为1，则删除这个维度（这里可以使用这个函数是因为batch_size设置为1）
@@ -64,7 +71,8 @@ def train():
         final_boxes_r, final_scores_r, final_category_r, loss_dict = faster_rcnn.build_whole_detection_network(  # 建立完整的Faster RCNN网络
             input_img_batch=img_batch,
             gtboxes_r_batch=gtboxes_and_label,  # 一个batch的旋转gt框
-            gtboxes_h_batch=gtboxes_and_label_AreaRectangle)  # 一个batch的水平gt框
+            gtboxes_h_batch=gtboxes_and_label_AreaRectangle,  # 一个batch的水平gt框
+            mask_batch=mask_batch[0])
 
     dets_in_img = draw_boxes_with_categories_and_scores(img_batch=img_batch,
                                                         boxes=final_boxes_h,

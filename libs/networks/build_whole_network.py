@@ -39,23 +39,21 @@ class DetectionNetwork(object):
 
             if cfgs.FPN_MODE == 'FPN':  # 使用普通版FPN提取Feature Map [返回结果为feature map list]
                 fpn_func = neck_fpn.NeckFPN(cfgs)
-                feature_maps = fpn_func.fpn(feature_dict, self.is_training)
+                return fpn_func.fpn(feature_dict, self.is_training)
 
             elif cfgs.FPN_MODE == 'DFPN':  # 使用DFPN提取Feature Map [返回结果为feature map list]
                 fpn_func = neck_fpn.NeckFPN(cfgs)
-                feature_maps = fpn_func.dense_fpn(feature_dict, self.is_training)
+                return fpn_func.dense_fpn(feature_dict, self.is_training)
 
             elif cfgs.FPN_MODE == 'SCRDet':  # 使用SF-Net + MDA-Net提取Feature Map [返回结果为单张feature map]
                 fpn_func = scrdet_neck.NeckSCRDet(cfgs)
-                feature_maps = fpn_func.scrdet_fpn(feature_dict, self.is_training)
+                return fpn_func.scrdet_fpn(feature_dict, self.is_training)
 
             elif cfgs.FPN_MODE == 'Resnet_C4':  # 直接使用Resnet的C4作为Feature Map
-                feature_maps = resnet.resnet_base(input_img_batch, scope_name=self.base_network_name,
+                return resnet.resnet_base(input_img_batch, scope_name=self.base_network_name,
                                                   is_training=self.is_training)
             else:
                 raise Exception('only support [DFPN, FPN, SCRDet, Resnet C4]')
-
-            return feature_maps
 
             # 直接使用C4作为Feature Map
             # return resnet.resnet_base(input_img_batch, scope_name=self.base_network_name, is_training=self.is_training)
@@ -208,22 +206,22 @@ class DetectionNetwork(object):
 
         return final_boxes, final_scores, final_category
 
-    def roi_pooling(self, feature_maps, rois, img_shape):
+    def roi_pooling(self, feature_maps, rois, img_shape, scope=""):
         '''
         这里用的是ROI Warping(介于ROI Pooling和ROI Align之间：RoIWarp是将RoI量化到feature map上)
         Here use roi warping as roi_pooling
 
         :param featuremaps_dict: feature map to crop  【A 4-D tensor of shape `[batch, channel, image_height, image_width]`】
-        :param rois: shape is [-1, 4]. [x1, y1, x2, y2]
+        :param rois: shape is [-1, 4]. [x1, y1, x2, y2]  proposal坐标
         :return:
         '''
 
-        with tf.variable_scope('ROI_Warping'):
+        with tf.variable_scope('ROI_Warping'+scope):
             img_h, img_w = tf.cast(img_shape[1], tf.float32), tf.cast(img_shape[2], tf.float32)
             N = tf.shape(rois)[0]
             x1, y1, x2, y2 = tf.unstack(rois, axis=1)
 
-            normalized_x1 = x1 / img_w  # 归一化坐标
+            normalized_x1 = x1 / img_w  # 标准化坐标
             normalized_x2 = x2 / img_w
             normalized_y1 = y1 / img_h
             normalized_y2 = y2 / img_h
@@ -231,7 +229,7 @@ class DetectionNetwork(object):
             normalized_rois = tf.transpose(  # 矩阵转置
                 tf.stack([normalized_y1, normalized_x1, normalized_y2, normalized_x2]), name='get_normalized_rois')
 
-            normalized_rois = tf.stop_gradient(normalized_rois)
+            normalized_rois = tf.stop_gradient(normalized_rois)  # 标准化后的proposal坐标
 
             # 卷积特征图相应部分被裁剪，并resize为常数大小（14,14）
             cropped_roi_features = tf.image.crop_and_resize(feature_maps, normalized_rois,
@@ -252,7 +250,17 @@ class DetectionNetwork(object):
         with tf.variable_scope('Fast-RCNN'):
             # 5. ROI Pooling
             with tf.variable_scope('rois_pooling'):
-                pooled_features = self.roi_pooling(feature_maps=feature_to_cropped, rois=rois, img_shape=img_shape)
+                if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":  # FPN情况下递归对每层Feature Map进行ROI Pooling
+                    pooled_features_list = []
+                    for level_name, p, rois in zip(cfgs.LEVELS, feature_to_cropped, rois):  # exclude P6_rois
+                        # p = tf.Print(p, [tf.shape(p)], summarize=10, message=level_name+'SHPAE***')
+                        pooled_features = self.roi_pooling(feature_maps=p, rois=rois, img_shape=img_shape,
+                                                           scope=level_name)
+                        pooled_features_list.append(pooled_features)
+
+                    pooled_features = tf.concat(pooled_features_list, axis=0)  # [minibatch_size, H, W, C]
+                else:
+                    pooled_features = self.roi_pooling(feature_maps=feature_to_cropped, rois=rois, img_shape=img_shape)
 
             # 6. inferecne rois in Fast-RCNN to obtain fc_flatten features
             if self.base_network_name.startswith('resnet'):
@@ -303,6 +311,85 @@ class DetectionNetwork(object):
                     bbox_pred_r = tf.reshape(bbox_pred_r, [-1, 5 * (cfgs.CLASS_NUM + 1)])
 
             return bbox_pred_h, cls_score_h, bbox_pred_r, cls_score_r
+
+    def assign_levels(self, all_rois, labels=None, bbox_targets=None):
+        '''
+        对RPN生成的proposals（ROIs）进行一个分类，找出它们各自来自于FPN的哪一层
+        :param all_rois:  RPN生成的所有Proposals
+        :param labels:  Proposal对应的label
+        :param bbox_targets:  Proposal对应的ground truth targets
+        :return:
+        '''
+        with tf.name_scope('assign_levels'):
+            # all_rois = tf.Print(all_rois, [tf.shape(all_rois)], summarize=10, message='ALL_ROIS_SHAPE*****')
+            xmin, ymin, xmax, ymax = tf.unstack(all_rois, axis=1)
+
+            h = tf.maximum(0., ymax - ymin)
+            w = tf.maximum(0., xmax - xmin)
+
+            levels = tf.floor(4. + tf.log(tf.sqrt(w * h + 1e-8) / 224.0) / tf.log(2.))  # 4 + log_2(***)
+            # use floor instead of round
+
+            min_level = int(cfgs.LEVLES[0][-1])
+            max_level = min(5, int(cfgs.LEVLES[-1][-1]))
+            levels = tf.maximum(levels, tf.ones_like(levels) * min_level)  # level minimum is 2
+            levels = tf.minimum(levels, tf.ones_like(levels) * max_level)  # level maximum is 5
+
+            levels = tf.stop_gradient(tf.reshape(levels, [-1]))
+
+            def get_rois(levels, level_i, rois, labels, bbox_targets):
+
+                level_i_indices = tf.reshape(tf.where(tf.equal(levels, level_i)), [-1])
+                # level_i_indices = tf.Print(level_i_indices, [tf.shape(tf.where(tf.equal(levels, level_i)))[0]], message="SHAPE%d***"%level_i,
+                #                            summarize=10)
+                tf.summary.scalar('LEVEL/LEVEL_%d_rois_NUM' % level_i, tf.shape(level_i_indices)[0])
+                level_i_rois = tf.gather(rois, level_i_indices)
+
+                if self.is_training:
+                    if cfgs.CUDA9:
+                        # Note: for cuda 9
+                        level_i_rois = tf.stop_gradient(level_i_rois)
+                        level_i_labels = tf.gather(labels, level_i_indices)
+
+                        level_i_targets = tf.gather(bbox_targets, level_i_indices)
+                    else:
+
+                        # Note: for cuda 8
+                        level_i_rois = tf.stop_gradient(tf.concat([level_i_rois, [[0, 0, 0., 0.]]], axis=0))
+                        # to avoid the num of level i rois is 0.0, which will broken the BP in tf
+
+                        level_i_labels = tf.gather(labels, level_i_indices)
+                        level_i_labels = tf.stop_gradient(tf.concat([level_i_labels, [0]], axis=0))
+
+                        level_i_targets = tf.gather(bbox_targets, level_i_indices)
+                        level_i_targets = tf.stop_gradient(tf.concat([level_i_targets,
+                                                                      tf.zeros(shape=(1, 4 * (cfgs.CLASS_NUM + 1)),
+                                                                               dtype=tf.float32)], axis=0))
+
+                    return level_i_rois, level_i_labels, level_i_targets
+                else:
+                    if not cfgs.CUDA9:
+                        # Note: for cuda 8
+                        level_i_rois = tf.concat([level_i_rois, [[0, 0, 0., 0.]]], axis=0)
+                    return level_i_rois, None, None
+
+            rois_list = []
+            labels_list = []
+            targets_list = []
+            for i in range(min_level, max_level + 1):
+                P_i_rois, P_i_labels, P_i_targets = get_rois(levels, level_i=i, rois=all_rois,
+                                                             labels=labels,
+                                                             bbox_targets=bbox_targets)
+                rois_list.append(P_i_rois)
+                labels_list.append(P_i_labels)
+                targets_list.append(P_i_targets)
+
+            if self.is_training:
+                all_labels = tf.concat(labels_list, axis=0)
+                all_targets = tf.concat(targets_list, axis=0)
+                return rois_list, all_labels, all_targets
+            else:
+                return rois_list  # [P2_rois, P3_rois, P4_rois, P5_rois] Note: P6 do not assign rois
 
     def add_anchor_img_smry(self, img, anchors, labels):
 
@@ -363,7 +450,6 @@ class DetectionNetwork(object):
                                                 stride=cfgs.ANCHOR_STRIDE,
                                                 name="make_anchors_forRPN")
             return anchors
-
 
     def build_loss(self, rpn_box_pred, rpn_bbox_targets, rpn_cls_score, rpn_labels,
                    bbox_pred_h, bbox_targets_h, cls_score_h, bbox_pred_r, bbox_targets_r, cls_score_r, labels):
@@ -454,7 +540,7 @@ class DetectionNetwork(object):
             }
         return loss_dict
 
-    def build_whole_detection_network(self, input_img_batch, gtboxes_r_batch, gtboxes_h_batch):
+    def build_whole_detection_network(self, input_img_batch, gtboxes_r_batch, gtboxes_h_batch, mask_batch=None):
 
         if self.is_training:
             # ensure shape is [M, 5] and [M, 6]
@@ -465,8 +551,8 @@ class DetectionNetwork(object):
 
         img_shape = tf.shape(input_img_batch)
 
-        # 1. build base network  提取特征图
-        feature_maps = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
+        # 1. build base network  提取特征图  (pa_mask仅在cfgs.FPN_MODE="SCRDet"的情况下返回)
+        feature_maps, pa_mask = self.build_base_network(input_img_batch)  # single FP without FPN; FP list with FPN/DFPN
 
         # 2. build rpn
         # Done: 现在是针对于单张Feature Map进行操作计算RPN两个分支 -> 需要对每个level的Feature Map都进行操作
@@ -581,11 +667,11 @@ class DetectionNetwork(object):
         # assign level   对RPN生成的proposals（ROIs）进行一个分类，找出它们各自来自于FPN的哪一层
         if cfgs.FPN_MODE == "FPN" or cfgs.FPN_MODE == "DFPN":
             if self.is_training:
-                rois_list, labels, bbox_targets = self.assign_levels(all_rois=rois,
+                rois, labels, bbox_targets = self.assign_levels(all_rois=rois,
                                                                      labels=labels,
                                                                      bbox_targets=bbox_targets_r)
             else:
-                rois_list = self.assign_levels(all_rois=rois)  # rois_list: [P2_rois, P3_rois, P4_rois, P5_rois]
+                rois = self.assign_levels(all_rois=rois)  # rois_list: [P2_rois, P3_rois, P4_rois, P5_rois]
 
         # -------------------------------------------------------------------------------------------------------------#
         #                                            Fast-RCNN                                                         #
@@ -594,12 +680,13 @@ class DetectionNetwork(object):
         # 5. build Fast-RCNN
         # TODO:change to adapt to FPN.(其实就是ROI Pooling处需要加个循环)
         # rois = tf.Print(rois, [tf.shape(rois)], 'rois shape', summarize=10)
-        bbox_pred_h, cls_score_h, bbox_pred_r, cls_score_r = self.build_fastrcnn(feature_to_cropped=feature_to_cropped,
-                                                                                 rois=rois,  # RPN生成的proposals
+        bbox_pred_h, cls_score_h, bbox_pred_r, cls_score_r = self.build_fastrcnn(feature_to_cropped=feature_maps,  # FPN情况下是P_List
+                                                                                 rois=rois,  # RPN生成的proposals(FPN情况下是rois_list)
                                                                                  img_shape=img_shape)
         # bbox_pred shape: [-1, 4*(cls_num+1)].
         # cls_score shape： [-1, cls_num+1]
 
+        # 对两个分类分支使用Softmax进行分类
         cls_prob_h = slim.softmax(cls_score_h, 'cls_prob_h')
         cls_prob_r = slim.softmax(cls_score_r, 'cls_prob_r')
 
@@ -639,6 +726,14 @@ class DetectionNetwork(object):
                                         bbox_targets_r=bbox_targets_r,
                                         cls_score_r=cls_score_r,
                                         labels=labels)
+
+            # build Attention Loss(SCRDet)
+            if cfgs.FPN_MODE=="SCRDet" and self.is_training:
+                with tf.variable_scope('build_attention_loss',
+                                       regularizer=slim.l2_regularizer(cfgs.WEIGHT_DECAY)):
+                    attention_loss_c4 = losses.build_attention_loss(mask_batch, pa_mask)
+                    attention_loss = attention_loss_c4
+                    loss_dict['attention_loss'] = attention_loss
 
             final_boxes_h, final_scores_h, final_category_h = self.postprocess_fastrcnn_h(rois=rois,
                                                                                           bbox_ppred=bbox_pred_h,
